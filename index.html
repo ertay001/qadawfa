@@ -555,11 +555,13 @@ footer .album-admin-trigger{color:rgba(255,232,223,.62)}
 body.page-home #faaliyetler, body.page-home #album, body.page-home #iletisim {display:none!important}
 body.page-album #hakkimizda, body.page-album #yonetim, body.page-album #duyurular, body.page-album #sponsorlar, body.page-album #iletisim {display:none!important}
 body.page-contact #hakkimizda, body.page-contact #yonetim, body.page-contact #duyurular, body.page-contact #sponsorlar, body.page-contact #faaliyetler, body.page-contact #album {display:none!important}
-#sponsorListe .sponsor-card{text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;min-height:190px}
-#sponsorListe .sponsor-logo{width:100%;height:100px;object-fit:contain;border-radius:10px;background:#fff;padding:8px}
-#sponsorListe .sponsor-name{font-weight:800;color:var(--red);font-size:17px}
-#sponsorListe .sponsor-description{font-size:14px;color:var(--mute)}
-#sponsorListe .sponsor-link{font-size:13px;color:var(--leaf2);font-weight:700}
+#sponsorListe{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:32px 24px;align-items:start}
+#sponsorListe .sponsor-card{background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:8px 4px!important;text-align:center;display:flex;flex-direction:column;align-items:center;gap:9px;min-height:0}
+#sponsorListe .sponsor-card:hover{transform:none;box-shadow:none!important}
+#sponsorListe .sponsor-logo{display:block;width:100%;max-width:200px;height:155px;object-fit:contain;border-radius:0;background:transparent;padding:0}
+#sponsorListe .sponsor-name{font-weight:850;color:#fff;font-size:clamp(20px,2.5vw,25px);line-height:1.25;overflow-wrap:anywhere}
+#sponsorListe .sponsor-description{font-size:14px;color:rgba(255,255,255,.78);line-height:1.55;margin:0;overflow-wrap:anywhere}
+#sponsorListe .sponsor-link{font-size:13px;color:#b6d5ad;font-weight:700}
 #boardMemberForm input,#boardMemberForm button,#sponsorForm input,#sponsorForm textarea,#sponsorForm button{font:inherit;margin:5px 0;padding:10px 12px;border-radius:9px;max-width:100%}
 #boardMemberForm input,#sponsorForm input,#sponsorForm textarea{width:100%;border:1px solid #e8d9d4;background:#fff;color:#241216}
 #boardMemberForm button,#sponsorForm button{border:0;background:var(--leaf);color:#fff;font-weight:700;cursor:pointer}
@@ -1079,39 +1081,16 @@ var SITE = {
     if(save.error){if(path)await client.storage.from(BUCKET).remove([path]);announcementSay('Üye eklenemedi: '+save.error.message);return}
     this.reset();announcementSay('Yönetim üyesi eklendi.');await loadBoardMembers();await loadBoardAdminList();
   });
-  // Her yenilemede yalnızca en güncel isteğin sonucu gösterilir.
-  var boardLoadVersion = 0;
   async function loadBoardMembers(){
     var host=document.getElementById('yonetimListe');if(!host)return;
-    var version=++boardLoadVersion;
     var result=await client.from('board_members').select('*').order('sort_order',{ascending:true});
-    if(version!==boardLoadVersion)return;
-    if(result.error){
-      console.error('Yönetim kurulu yükleme hatası:',result.error);
-      return;
+    if(result.error||!result.data||!result.data.length)return;
+    host.innerHTML='';
+    for(var i=0;i<result.data.length;i++){
+      var m=result.data[i],card=el('div','card person'),avatar=el('div','avatar');
+      if(m.photo_path){var signed=await client.storage.from(BUCKET).createSignedUrl(m.photo_path,3600);var u=signed.data&&signed.data.signedUrl;if(u){var im=el('img');im.src=u;im.alt=m.name+' fotoğrafı';im.loading='lazy';avatar.appendChild(im)}}
+      card.appendChild(avatar);card.appendChild(el('b',null,m.name));card.appendChild(el('span',null,m.role));host.appendChild(card);
     }
-    var seen=new Set();
-    var members=(result.data||[]).filter(function(m){
-      if(m.id==null)return true;
-      var id=String(m.id);
-      if(seen.has(id))return false;
-      seen.add(id);
-      return true;
-    });
-    var cards=await Promise.all(members.map(async function(m){
-      var card=el('div','card person'),avatar=el('div','avatar');
-      if(m.photo_path){
-        var signed=await client.storage.from(BUCKET).createSignedUrl(m.photo_path,3600);
-        var u=signed.data&&signed.data.signedUrl;
-        if(u){var im=el('img');im.src=u;im.alt=m.name+' fotoğrafı';im.loading='lazy';avatar.appendChild(im)}
-      }
-      card.appendChild(avatar);
-      card.appendChild(el('b',null,m.name));
-      card.appendChild(el('span',null,m.role));
-      return card;
-    }));
-    if(version!==boardLoadVersion)return;
-    host.replaceChildren(...cards);
   }
   async function loadSponsors(){
     var host=document.getElementById('sponsorListe');if(!host)return;
@@ -1122,7 +1101,7 @@ var SITE = {
     for(var i=0;i<result.data.length;i++){
       var s=result.data[i],card=el('article','card sponsor-card');
       if(s.logo_path){var signed=await client.storage.from(BUCKET).createSignedUrl(s.logo_path,3600);var url=signed.data&&signed.data.signedUrl;if(url){var im=el('img','sponsor-logo');im.src=url;im.alt=s.name+' logosu';card.appendChild(im)}}
-      card.appendChild(el('div','sponsor-name',s.name));if(s.description)card.appendChild(el('p','sponsor-description',s.description));
+      card.appendChild(el('div','sponsor-name',s.name));if(s.description&&s.description.trim())card.appendChild(el('p','sponsor-description',s.description.trim()));
       if(s.website_url){var a=el('a','sponsor-link','Web sitesini ziyaret et ↗');a.href=s.website_url;a.target='_blank';a.rel='noopener noreferrer';card.appendChild(a)}
       host.appendChild(card);
     }
